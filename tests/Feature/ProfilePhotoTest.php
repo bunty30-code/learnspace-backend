@@ -90,6 +90,46 @@ class ProfilePhotoTest extends TestCase
         $this->assertSame($url, Student::where('user_id', $user->id)->value('profile_image'));
     }
 
+    public function test_profile_photo_upload_and_student_profile_update_use_one_request(): void
+    {
+        Storage::fake('public');
+        $user = $this->makeStudent();
+        $oldPath = 'avatars/old-student.png';
+        Storage::disk('public')->put($oldPath, 'old');
+        $oldUrl = Storage::disk('public')->url($oldPath);
+        $user->update(['profile_image' => $oldUrl]);
+        Student::where('user_id', $user->id)->update(['profile_image' => $oldUrl]);
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/auth/profile-image', [
+            'image' => 'data:image/png;base64,'.self::PNG,
+        ])->assertOk()
+            ->assertJsonStructure(['user', 'student']);
+
+        $url = $response->json('student.profile_image');
+        $path = 'avatars/'.basename(parse_url($url, PHP_URL_PATH));
+
+        $this->assertSame($url, $user->fresh()->profile_image);
+        $this->assertSame($url, Student::where('user_id', $user->id)->value('profile_image'));
+        Storage::disk('public')->assertExists($path);
+        Storage::disk('public')->assertMissing($oldPath);
+    }
+
+    public function test_profile_photo_upload_updates_admin_profile_in_one_request(): void
+    {
+        Storage::fake('public');
+        $admin = $this->makeAdmin();
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/auth/profile-image', [
+            'image' => 'data:image/png;base64,'.self::PNG,
+        ])->assertOk()
+            ->assertJsonStructure(['user'])
+            ->assertJsonMissingPath('student');
+
+        $this->assertSame($response->json('user.profile_image'), $admin->fresh()->profile_image);
+    }
+
     public function test_replacing_a_photo_deletes_the_old_file_but_keeps_the_new_one(): void
     {
         Storage::fake('public');

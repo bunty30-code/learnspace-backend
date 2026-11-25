@@ -43,6 +43,7 @@ Route::middleware([StartSession::class, 'sanctum.cookie', 'auth:sanctum'])->grou
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/user', [AuthController::class, 'user']);
     Route::post('auth/upload-image', [UploadController::class, 'uploadImage']);
+    Route::post('auth/profile-image', [UploadController::class, 'updateProfileImage']);
 
     Route::prefix('student')
         ->middleware('role:student')
