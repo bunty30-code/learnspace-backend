@@ -6,6 +6,7 @@ use App\Models\Student;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -69,6 +70,10 @@ class ProfilePhotoTest extends TestCase
         $url = $response->json('url');
         $this->assertStringContainsString('avatars/', $url);
         Storage::disk('public')->assertExists('avatars/'.basename(parse_url($url, PHP_URL_PATH)));
+
+        $this->get(parse_url($url, PHP_URL_PATH))
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
     }
 
     public function test_student_photo_is_saved_to_both_students_and_users_tables(): void
@@ -128,6 +133,77 @@ class ProfilePhotoTest extends TestCase
             ->assertJsonMissingPath('student');
 
         $this->assertSame($response->json('user.profile_image'), $admin->fresh()->profile_image);
+    }
+
+    public function test_cloudinary_upload_saves_the_returned_url_to_user_and_student_profiles(): void
+    {
+        config([
+            'services.cloudinary.cloud_name' => 'test-cloud',
+            'services.cloudinary.api_key' => 'test-key',
+            'services.cloudinary.api_secret' => 'test-secret',
+        ]);
+        Http::fake([
+            'https://api.cloudinary.com/v1_1/test-cloud/image/upload' => Http::response([
+                'secure_url' => 'https://res.cloudinary.com/test-cloud/image/upload/v123/avatars/new-photo.png',
+                'public_id' => 'avatars/new-photo',
+            ]),
+        ]);
+
+        $user = $this->makeStudent();
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/auth/profile-image', [
+            'image' => 'data:image/png;base64,'.self::PNG,
+        ])->assertOk();
+
+        $url = 'https://res.cloudinary.com/test-cloud/image/upload/v123/avatars/new-photo.png';
+        $this->assertSame($url, $response->json('user.profile_image'));
+        $this->assertSame($url, $response->json('student.profile_image'));
+        $this->assertSame($url, $response->json('student.user.profile_image'));
+        $this->assertSame($url, $user->fresh()->profile_image);
+        $this->assertSame($url, Student::where('user_id', $user->id)->value('profile_image'));
+        $this->getJson('/api/auth/user')->assertJsonPath('user.profile_image', $url);
+        $this->getJson('/api/student/profile')->assertJsonPath('student.profile_image', $url);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.cloudinary.com/v1_1/test-cloud/image/upload');
+    }
+
+    public function test_cloudinary_upload_failure_does_not_save_a_profile_or_return_success(): void
+    {
+        config([
+            'services.cloudinary.cloud_name' => 'test-cloud',
+            'services.cloudinary.api_key' => 'test-key',
+            'services.cloudinary.api_secret' => 'test-secret',
+        ]);
+        Http::fake([
+            'https://api.cloudinary.com/v1_1/test-cloud/image/upload' => Http::response([
+                'error' => ['message' => 'Upload failed'],
+            ], 503),
+        ]);
+
+        $user = $this->makeAdmin();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/auth/profile-image', [
+            'image' => 'data:image/png;base64,'.self::PNG,
+        ])->assertServerError();
+
+        $this->assertNull($user->fresh()->profile_image);
+    }
+
+    public function test_production_does_not_claim_success_when_cloudinary_is_unconfigured(): void
+    {
+        $this->app['env'] = 'production';
+        Storage::fake('public');
+        $user = $this->makeAdmin();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/auth/profile-image', [
+            'image' => 'data:image/png;base64,'.self::PNG,
+        ])->assertServerError();
+
+        $this->assertNull($user->fresh()->profile_image);
+        $this->assertEmpty(Storage::disk('public')->allFiles());
     }
 
     public function test_replacing_a_photo_deletes_the_old_file_but_keeps_the_new_one(): void

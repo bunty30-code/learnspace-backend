@@ -41,6 +41,10 @@ php artisan boost:install
 
 Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
 
+## Profile image storage
+
+Profile photos are uploaded to Cloudinary when credentials are configured. Set either `CLOUDINARY_URL` or all three of `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in the backend environment. Keep these values in the deployment secret manager; never expose the API secret to the frontend. Production uploads fail rather than report success when Cloudinary is not configured. Local and test environments use Laravel's public disk, with avatars served from `/storage/avatars`.
+
 ## Contributing
 
 Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).

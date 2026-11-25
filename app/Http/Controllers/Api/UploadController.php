@@ -7,9 +7,6 @@ use App\Support\ProfileImage;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use RuntimeException;
 
 class UploadController extends Controller
 {
@@ -33,11 +30,11 @@ class UploadController extends Controller
             'image' => ['required', 'string', 'max:'.self::MAX_BASE64_CHARS],
         ]);
 
-        $relative = $this->storeValidatedImage($validated['image']);
+        $url = $this->storeValidatedImage($validated['image']);
 
         return response()->json([
             'message' => 'Image uploaded successfully',
-            'url' => Storage::disk('public')->url($relative),
+            'url' => $url,
         ]);
     }
 
@@ -52,8 +49,7 @@ class UploadController extends Controller
             ? $user->student()->firstOrFail()
             : null;
         $previousImages = [$user->profile_image, $student?->profile_image];
-        $relative = $this->storeValidatedImage($validated['image']);
-        $url = Storage::disk('public')->url($relative);
+        $url = $this->storeValidatedImage($validated['image']);
 
         try {
             DB::transaction(function () use ($user, $student, $url): void {
@@ -119,12 +115,6 @@ class UploadController extends Controller
             ], 422));
         }
 
-        $filename = Str::uuid().'.'.self::EXTENSIONS[$mime];
-        $relative = ProfileImage::DIRECTORY.'/'.$filename;
-        if (! Storage::disk('public')->put($relative, $decoded)) {
-            throw new RuntimeException('Unable to store the uploaded image.');
-        }
-
-        return $relative;
+        return ProfileImage::store($decoded, self::EXTENSIONS[$mime]);
     }
 }
