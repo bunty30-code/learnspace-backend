@@ -57,7 +57,7 @@ class StudentController extends Controller
     |--------------------------------------------------------------------------
     | Progress aggregation
     |--------------------------------------------------------------------------
-    | Har student ka learning stage nikalne ke liye 3 aggregate queries.
+    | Har student ka learning stage nikalne ke liye batched aggregate queries.
     | N+1 loop nahi banaya — saare students ke liye ek hi pass me counts aate hain.
     |
     | Pipeline: enrolled -> lessons done (0-80%) -> quiz passed (100%)
@@ -83,16 +83,6 @@ class StudentController extends Controller
             ->get()
             ->keyBy('student_id');
 
-        $submissions = Submission::whereIn('student_id', $studentIds)
-            ->selectRaw("student_id,
-                COUNT(*) as submissions,
-                SUM(CASE WHEN status IN ('pending', 'under_review') THEN 1 ELSE 0 END) as pending_submissions,
-                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_submissions,
-                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_submissions")
-            ->groupBy('student_id')
-            ->get()
-            ->keyBy('student_id');
-
         $certificates = Certificate::whereIn('student_id', $studentIds)
             ->selectRaw('student_id, COUNT(*) as certificates')
             ->groupBy('student_id')
@@ -104,6 +94,15 @@ class StudentController extends Controller
          * alag query nahi, sab ek hi pass me.
          */
         $enrollmentRows = Enrollment::whereIn('student_id', $studentIds)
+            ->select([
+                'student_id',
+                'course_id',
+                'lessons_completed',
+                'completed',
+                'final_quiz_passed',
+                'final_quiz_score',
+                'progress',
+            ])
             ->with('course:id,title')
             ->get();
 
@@ -120,14 +119,25 @@ class StudentController extends Controller
 
         $projectsByCourse = $courseIds
             ? Project::whereIn('course_id', $courseIds)
-                ->orderBy('id')
-                ->get(['id', 'course_id'])
+                ->selectRaw('MIN(id) as id, course_id')
                 ->groupBy('course_id')
-                ->map(fn ($group) => $group->first())
+                ->get()
+                ->keyBy('course_id')
                 ->all()
             : [];
 
-        $submissionRows = Submission::whereIn('student_id', $studentIds)->get();
+        $submissionRows = Submission::whereIn('student_id', $studentIds)
+            ->orderBy('id')
+            ->get(['student_id', 'project_id', 'status']);
+
+        $submissions = $submissionRows
+            ->groupBy('student_id')
+            ->map(fn ($group) => (object) [
+                'submissions' => $group->count(),
+                'pending_submissions' => $group->whereIn('status', ['pending', 'under_review'])->count(),
+                'approved_submissions' => $group->where('status', 'approved')->count(),
+                'rejected_submissions' => $group->where('status', 'rejected')->count(),
+            ]);
 
         $submissionByProject = $submissionRows
             ->groupBy('student_id')

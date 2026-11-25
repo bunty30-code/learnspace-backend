@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AnalyticsController as AdminAnalyticsController;
 use App\Http\Controllers\Api\Admin\CertificateController as AdminCertificateController;
 use App\Http\Controllers\Api\Admin\CourseController as AdminCourseController;
+use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\Admin\LessonController as AdminLessonController;
 use App\Http\Controllers\Api\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Api\Admin\ProjectController as AdminProjectController;
@@ -13,7 +14,6 @@ use App\Http\Controllers\Api\Admin\SubmissionController as AdminSubmissionContro
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PublicController;
 use App\Http\Controllers\Api\SetupController;
-use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\Student\CertificateController as StudentCertificateController;
 use App\Http\Controllers\Api\Student\CourseController as StudentCourseController;
 use App\Http\Controllers\Api\Student\EnrollmentController as StudentEnrollmentController;
@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Student\ProjectController as StudentProjectControll
 use App\Http\Controllers\Api\Student\QuizController as StudentQuizController;
 use App\Http\Controllers\Api\Student\StudentController as StudentStudentController;
 use App\Http\Controllers\Api\Student\SubmissionController as StudentSubmissionController;
+use App\Http\Controllers\Api\UploadController;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 
@@ -85,6 +86,7 @@ Route::middleware([StartSession::class, 'sanctum.cookie', 'auth:sanctum'])->grou
     Route::prefix('admin')
         ->middleware('role:admin')
         ->group(function (): void {
+            Route::get('dashboard', [AdminDashboardController::class, 'index']);
             Route::get('students', [AdminStudentController::class, 'index']);
             Route::get('students/{id}', [AdminStudentController::class, 'show']);
 
