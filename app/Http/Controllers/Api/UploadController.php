@@ -30,7 +30,7 @@ class UploadController extends Controller
             'image' => ['required', 'string', 'max:'.self::MAX_BASE64_CHARS],
         ]);
 
-        $url = $this->storeValidatedImage($validated['image']);
+        $url = $this->storeValidatedImage($validated['image'], $request->getSchemeAndHttpHost());
 
         return response()->json([
             'message' => 'Image uploaded successfully',
@@ -49,7 +49,7 @@ class UploadController extends Controller
             ? $user->student()->firstOrFail()
             : null;
         $previousImages = [$user->profile_image, $student?->profile_image];
-        $url = $this->storeValidatedImage($validated['image']);
+        $url = $this->storeValidatedImage($validated['image'], $request->getSchemeAndHttpHost());
 
         try {
             DB::transaction(function () use ($user, $student, $url): void {
@@ -75,7 +75,7 @@ class UploadController extends Controller
         return response()->json($payload);
     }
 
-    private function storeValidatedImage(string $data): string
+    private function storeValidatedImage(string $data, string $requestOrigin): string
     {
         if (! str_starts_with($data, 'data:image/')) {
             throw new HttpResponseException(response()->json([
@@ -115,6 +115,6 @@ class UploadController extends Controller
             ], 422));
         }
 
-        return ProfileImage::store($decoded, self::EXTENSIONS[$mime]);
+        return ProfileImage::store($decoded, self::EXTENSIONS[$mime], $requestOrigin);
     }
 }

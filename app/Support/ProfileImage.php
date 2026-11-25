@@ -26,7 +26,7 @@ class ProfileImage
 {
     public const DIRECTORY = 'avatars';
 
-    public static function store(string $contents, string $extension): string
+    public static function store(string $contents, string $extension, string $requestOrigin): string
     {
         $credentials = self::cloudinaryCredentials();
 
@@ -76,7 +76,7 @@ class ProfileImage
             throw new RuntimeException('Unable to store the uploaded image.');
         }
 
-        return Storage::disk('public')->url($relative);
+        return rtrim($requestOrigin, '/').'/storage/'.$relative;
     }
 
     /**
@@ -257,7 +257,7 @@ class ProfileImage
     }
 
     /**
-     * `{APP_URL}/storage/avatars/x.jpg` ya `avatars/x.jpg` ko disk-relative
+     * `{API_ORIGIN}/storage/avatars/x.jpg` ya `avatars/x.jpg` ko disk-relative
      * path me badlo. `avatars/` prefix ke bahar ho to null (delete mat karo).
      */
     private static function toRelativePath(string $url): ?string
@@ -265,7 +265,7 @@ class ProfileImage
         $path = parse_url($url, PHP_URL_PATH) ?: $url;
         $path = ltrim(rawurldecode($path), '/');
 
-        // `{APP_URL}/storage/avatars/x.jpg` ka sirf `avatars/x.jpg` hissa chahiye.
+        // `/storage/avatars/x.jpg` ka sirf `avatars/x.jpg` hissa chahiye.
         $prefix = self::DIRECTORY.'/';
         $index = strpos($path, 'storage/'.$prefix);
 

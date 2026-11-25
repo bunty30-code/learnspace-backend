@@ -61,17 +61,17 @@ class ProfilePhotoTest extends TestCase
         Storage::fake('public');
         Sanctum::actingAs($this->makeStudent());
 
-        $response = $this->postJson('/api/auth/upload-image', [
+        $response = $this->postJson('https://learnspace-api.test:8443/api/auth/upload-image', [
             'image' => 'data:image/png;base64,'.self::PNG,
         ]);
 
         $response->assertOk();
 
         $url = $response->json('url');
-        $this->assertStringContainsString('avatars/', $url);
+        $this->assertStringStartsWith('https://learnspace-api.test:8443/storage/avatars/', $url);
         Storage::disk('public')->assertExists('avatars/'.basename(parse_url($url, PHP_URL_PATH)));
 
-        $this->get(parse_url($url, PHP_URL_PATH))
+        $this->get($url)
             ->assertOk()
             ->assertHeader('content-type', 'image/png');
     }
@@ -106,7 +106,7 @@ class ProfilePhotoTest extends TestCase
         Student::where('user_id', $user->id)->update(['profile_image' => $oldUrl]);
         Sanctum::actingAs($user);
 
-        $response = $this->postJson('/api/auth/profile-image', [
+        $response = $this->postJson('https://learnspace-api.test:8443/api/auth/profile-image', [
             'image' => 'data:image/png;base64,'.self::PNG,
         ])->assertOk()
             ->assertJsonStructure(['user', 'student']);
@@ -114,10 +114,12 @@ class ProfilePhotoTest extends TestCase
         $url = $response->json('student.profile_image');
         $path = 'avatars/'.basename(parse_url($url, PHP_URL_PATH));
 
+        $this->assertStringStartsWith('https://learnspace-api.test:8443/storage/avatars/', $url);
         $this->assertSame($url, $user->fresh()->profile_image);
         $this->assertSame($url, Student::where('user_id', $user->id)->value('profile_image'));
         Storage::disk('public')->assertExists($path);
         Storage::disk('public')->assertMissing($oldPath);
+        $this->get($url)->assertOk()->assertHeader('content-type', 'image/png');
     }
 
     public function test_profile_photo_upload_updates_admin_profile_in_one_request(): void
